@@ -20,15 +20,21 @@ def setupCodeCoverage() {
   sh './cc-test-reporter before-build'
 }
 
-def runDevelopmentTests(){
+def install(){
   sh 'make install'
+}
+
+def runDevelopmentTests(){
   sh 'make developmentTests'
 }
 
 def runProductionTests(){
-  sh 'make install'
   sh 'make productionTests'
   sh 'npm prune --production'
+}
+
+def runChromaticTests(){
+  sh 'make testChromatic'
 }
 
 def getCommitInfo = {
@@ -120,7 +126,19 @@ pipeline {
         cancelPreviousBuilds()
       }
     }
-    stage ('Build and Test') {
+    stage ('Build') {
+      failFast true
+      agent {
+        docker {
+          image "${nodeImage}"
+          args '-u root -v /etc/pki:/certs'
+        }
+      }
+      steps {
+        install()
+      }
+    }
+    stage ('Test') {
       when {
         expression { env.BRANCH_NAME != 'latest' }
       }
@@ -135,7 +153,7 @@ pipeline {
           }
           steps {
             setupCodeCoverage()
-            withCredentials([string(credentialsId: 'simorgh-cc-test-reporter-id', variable: 'CC_TEST_REPORTER_ID'), string(credentialsId: 'simorgh-chromatic-app-code', variable: 'CHROMATIC_APP_CODE')]) {
+            withCredentials([string(credentialsId: 'simorgh-cc-test-reporter-id', variable: 'CC_TEST_REPORTER_ID')]) {
               runDevelopmentTests()
               sh './cc-test-reporter after-build -t lcov --debug --exit-code 0'
 
@@ -153,6 +171,19 @@ pipeline {
             runProductionTests()
           }
         }
+        stage ('Test Chromatic') {
+          agent {
+            docker {
+              image "${nodeImage}"
+              args '-u root -v /etc/pki:/certs'
+            }
+          }
+          steps {
+            withCredentials([string(credentialsId: 'simorgh-chromatic-app-code', variable: 'CHROMATIC_APP_CODE')]) {
+              runChromaticTests()
+            }
+          }
+        }
       }
       post {
         always {
@@ -162,7 +193,7 @@ pipeline {
         }
       }
     }
-    stage ('Build, Test & Package') {
+    stage ('Test & Package') {
       when {
         expression { env.BRANCH_NAME == 'latest' }
       }
@@ -176,7 +207,7 @@ pipeline {
           }
           steps {
             setupCodeCoverage()
-            withCredentials([string(credentialsId: 'simorgh-cc-test-reporter-id', variable: 'CC_TEST_REPORTER_ID'), string(credentialsId: 'simorgh-chromatic-app-code', variable: 'CHROMATIC_APP_CODE')]) {
+            withCredentials([string(credentialsId: 'simorgh-cc-test-reporter-id', variable: 'CC_TEST_REPORTER_ID')]) {
               runDevelopmentTests()
               sh './cc-test-reporter after-build -t lcov --debug --exit-code 0'
             }
