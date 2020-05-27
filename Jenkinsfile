@@ -127,7 +127,6 @@ pipeline {
       }
     }
     stage ('Build') {
-      failFast true
       agent {
         docker {
           image "${nodeImage}"
@@ -321,7 +320,7 @@ pipeline {
         getCommitInfo()
       }
       // Clean the workspace
-      cleanWs()
+      //cleanWs()
     }
     aborted {
       script {
